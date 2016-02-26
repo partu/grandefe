@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 from dbconnector import DBConnector
 from catalog import DefeCatalog
 

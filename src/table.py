@@ -4,7 +4,11 @@ class Table(object):
 		self.columns = columns
 
 
+
+	def column_names(self):
+		return [name for name,_type in columns]
+
+
 	def format_columns_for_query(self):
-		print 
-		return [" ".join(elem) for elem in self.columns]
+		return ", ".join([" ".join(column) for column in self.columns])
 		 
