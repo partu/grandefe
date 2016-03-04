@@ -23,7 +23,7 @@ class GranDT(object):
 		return _cursor.fetchone()
 
 	def get_player_id(self, player):
-		query = self.catalog.query_get_player_id_by_name_and_category(player)
+		query = self.catalog.query_get_player_id_by_name_category_and_position(player)
 		_cursor = self.conn.execute_query(query)
 		value = _cursor.fetchone()
 		if value:
@@ -33,38 +33,98 @@ class GranDT(object):
 		return res
 
 
+	def calculate_team_points(self, round_num, players_ids):
+		''' Take into account that if a tuple is present inside the players ids is because you have the option to choose 
+		between that two players. The decision must be the one that has more points '''
+		#Do we have to choose ? 
+		choose = None
+		flatten_ids = []
+		# print "Ids before flattening: ", players_ids
+		
+		for elem in players_ids:
+			if isinstance(elem, tuple):
+				choose = elem
+				flatten_ids.extend(list(elem))
+			else:
+				flatten_ids.append(elem)
+		# print "Ids after flattening: ", flatten_ids
+
+		query = self.catalog.get_points_for_player_id_in_round(round_num, flatten_ids)
+		player_id_points = self.conn.execute_query(query).fetchall()
+
+		# print "Points per player before choosing: ", player_id_points
+		if choose:
+			candidates = filter(lambda x: x[0] in choose, player_id_points)
+			looser = min(candidates, key= lambda x: x[1])
+			index_of_looser = player_id_points.index(looser)
+			player_id_points.pop(index_of_looser)
+
+
+		# print "Points per player after choosing: ", player_id_points
+		# print "TOtal points of team : ", sum(points for _, points in player_id_points)
+		return sum(points for _, points in player_id_points)
+
+
+
+
+
+
+
+
+
+
 	def get_players_that_will_count(self, team, _round):
-		players = []
-		#Check that the 5 titulars played
-		query = self.catalog.query_get_present_players(_round, team.titulars)
-		present_titulars = [value[0] for value in self.conn.execute_query(query).fetchall()]
+		all_team_players = team.titulars  + team.alternates
 
-		print "Titulars: ", team.titulars
-		print "Prenset titulars: ", present_titulars
+		#Check which players played
+		query = self.catalog.query_get_if_present_players_and_positions(_round, all_team_players)
+		players_info = self.conn.execute_query(query).fetchall()
+		present_alternates_info = [(_id, pos, prst) for _id, pos, prst in players_info if _id in team.alternates and prst == 1 ]
 
+		present_titulars_ids = [_id for _id, _, present in players_info if _id in team.titulars and present == 1]
+
+		# print "Present titulars :", present_titulars_ids
+		# print "Present alternates: ", [_id for _id,_,_ in present_alternates_info]
 		#If all titulars played
-		if len(present_titulars) == constants.NUMBER_OF_TITULARS:
-			return present_titulars
+		if len(present_titulars_ids) == constants.NUMBER_OF_TITULARS:
+			return present_titulars_ids
 
 		else:
+			playing_players = present_titulars_ids
 			#use the alternate player for the missing titulars
-			absent_titulars = filter(lambda _id: _id not in present_titulars, team.titulars)
-			print 'absent_titulars: ' , absent_titulars
-			query = self.catalog.query_get_positions_of_players(absent_titulars)
-			print query
-			missing_positions = self.conn.execute_query(query).fetchall()
-			print "Miss pos: " , missing_positions
+			absent_titulars_ids = list(filter(lambda _id: _id not in present_titulars_ids, team.titulars))
+			missing_positions = [pos for _id, pos, _  in players_info if _id in absent_titulars_ids]
+			# print "absent titulars: ", absent_titulars_ids
+			# print "Miss pos: " , missing_positions
 
-
-			#####HAY QUE TRAER LOS SUPLLENTES DE ESTE EQUIPO QUE TIENEN LA MISMA POSICION DE MISSING Y QUE JUGARON ESA VEZ! 
-
-
+			counter = collections.Counter()
+			for pos in missing_positions:
+				counter[pos] += 1
 
 
 
+			print 'PLaying players before change', playing_players
+			#Use the alternate players of each missing position
+			for pos, count in counter.most_common():
+				possible_players = filter(lambda x: x[1] == pos, present_alternates_info)
+				if possible_players:
+					res = []
+					for player in possible_players:
+						index_of_new_player = present_alternates_info.index(player) 
+						new_player_id, _ , _ = present_alternates_info.pop(index_of_new_player)
+						res.append(new_player_id)
+					
+					if count == 1:
+						res = tuple(res) if len(res) == 2 else res[0]
+						playing_players.append(res)
+					
+					elif count == 2:
+						playing_players.extend(res)
+					else:
+						raise Exception("Impossible!! {}".format(str(e)))
 
-
-
+			print 'PLaying players after change', playing_players
+			return playing_players
 
 
 
@@ -141,24 +201,26 @@ class GranDT(object):
 
 			#Set the history entry for this player
 			query = self.catalog.query_to_set_history_entry(round_num, player_id, total_points, player_values)
-			print query
 			self.conn.execute_query(query)
 
 		#Once finished updating points of this round for all the players, we continue with the teams! 
 		#Update teams points points_of_teams_by_round
-		#take into account titularities!!!!
 
 		query = self.catalog.query_get_all_teams()		
 		teams = self.conn.execute_query(query).fetchall()
-		print teams
 
 		for team in teams:
 			#Get players 
 			team = Team(team[0], team[1:6], team[6:])
 			players_ids = self.get_players_that_will_count(team, round_num)
-			calculate_team_points(players_ids)
+			team_points = self.calculate_team_points(round_num, players_ids)
 
-			return
+			query = self.catalog.query_update_team_points_for_round(round_num, team.key, team_points)
+			print query
+			self.conn.execute_query(query)
+
+
+		return
 
 	
 
@@ -167,14 +229,14 @@ if __name__ == '__main__':
 	gdt = GranDT(catalog)
 
 	gonza = Player('Gonza', 'delanteRo', 'SuperIOR')
-	partu = Player('Partu', 'delanteRo', 'Juveniles')
-	mudo = Player('Mudo', 'delanteRo', 'menores')
-	mono = Player('Mono', 'DEFENSOR', 'menores')
-	tebi = Player('Tebi', 'delanteRo', 'Cadetes')
-	nacho = Player('Nacho', 'delanteRo', 'Menores')
-	negro = Player('Negro', 'defensor', 'Cadetes')
-	chola = Player('Chola', 'mediocampista', 'Juveniles')
-	seba = Player('Seba', 'arquero', 'Superior')
+	partu = Player('Partu', 'Defensor', 'Juveniles')
+	mudo = Player('Mudo', 'defensor', 'menores')
+	mono = Player('Mono', 'Arquero', 'menores')
+	tebi = Player('Tebi', 'Arquero', 'Cadetes')
+	nacho = Player('Nacho', 'delanteRo', 'superior')
+	negro = Player('Negro', 'defensor', 'Juveniles')
+	chola = Player('Chola', 'Defensor', 'Cadetes')
+	seba = Player('Seba', 'delantero', 'Superior')
 
 
 	gdt.add_player(gonza)
@@ -188,14 +250,31 @@ if __name__ == '__main__':
 	gdt.add_player(seba)
 
 
-	gdt.add_user(3617541239468, 'loco', 'locos', [(gonza,1),(partu,0),(mudo,1),(mono,0),(tebi,1),(nacho,1),(negro,1),(chola,0),(seba,0)])
+	gdt.add_user(12, 'loco', 'locos', [  (gonza,1),
+													(partu,0),
+													(mudo,1),
+													(mono,0),
+													(tebi,1),
+													(nacho,1),
+													(negro,1),
+													(chola,0),
+													(seba,0)]
+											)
 
 
 #	gdt.change_team('b@a.com', [('Gonza','SuperIOR'),('Partu','Juveniles'),('Mudo','Menores'),('mono','menores'),('Tebi','cadetes')])
 	
 	#a = '{"round_number": 1212,"stats":[{ "name": "partu" ,"cat":"JuveNiLes" ,"pos": "delantero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}]}'
-	a = '{"round_number": 1213,"stats":[{ "name": "partu" ,"cat":"JuveNiLes" ,"pos": "delantero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}},{ "name": "mudo" ,"cat":"menores" ,"pos": "delantero" ,"values": {"present": 0,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}},{ "name": "gonza" ,"cat":"superior" ,"pos": "delantero" ,"values": {"present": 0,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}},{ "name": "mono" ,"cat":"menores" ,"pos": "delantero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}},{ "name": "tebi" ,"cat":"cadetes" ,"pos": "delantero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}},{ "name": "nacho" ,"cat":"menores" ,"pos": "delantero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}},{ "name": "negro" ,"cat":"cadetes" ,"pos": "defensor" ,"values": {"present": 0,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}},{ "name": "chola" ,"cat":"JuveNiLes" ,"pos": "mediocampista" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}},{ "name": "seba" ,"cat":"superior" ,"pos": "arquero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}]}'
-
+	a = '{"round_number": 1,"stats":[{ "name": "partu" ,"cat":"Juveniles" ,"pos": "Defensor" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}, \
+										{ "name": "mudo" ,"cat":"menores" ,"pos": "defensor" ,"values": {"present": 0,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}, \
+										{ "name": "gonza" ,"cat":"superior" ,"pos": "delantero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}, \
+										{ "name": "mono" ,"cat":"menores" ,"pos": "arquero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}, \
+										{ "name": "tebi" ,"cat":"cadetes" ,"pos": "arquero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}, \
+										{ "name": "nacho" ,"cat":"superior" ,"pos": "delantero" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}, \
+										{ "name": "negro" ,"cat":"JuveNiLes" ,"pos": "defensor" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}, \
+										{ "name": "chola" ,"cat":"cadetes" ,"pos": "defensor" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}}, \
+										{ "name": "seba" ,"cat":"superior" ,"pos": "delanteRo" ,"values": {"present": 1,"mvp": 1,"pen_goals": 1,"goals": 20,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 2,"blue_card": 1,"miss_pen": 3,"saved_pen": 1}} \
+										]}'
 	# a = {"number": 1, "stats": {"Superior": {"Gonza": {"present": 1,"absent": 1,"mvp": 1,"pen_goals": 1,"goals": 1,"against_goals": 1,"own_goals": 1,"yellow_card": 1,"red_card": 1,"blue_card": 1,"miss_pen": 1,"saved_pen": 1}}}}
 	# a = json.dumps(a)
 	gdt.add_round(a)

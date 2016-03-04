@@ -5,10 +5,10 @@ DB_NAME = 'defe_gdt.db'
 #Positions
 ARQUERO = 'Arquero'
 DEFENSOR =  'Defensor'
-MEDIOCAMPISTA =   'Mediocampista'
+#MEDIOCAMPISTA =   'Mediocampista'
 DELANTERO =  'Delantero'
 
-ALLOWED_POSITIONS  = {ARQUERO,DEFENSOR,MEDIOCAMPISTA,DELANTERO}
+ALLOWED_POSITIONS  = {ARQUERO,DEFENSOR,DELANTERO}
 
 
 #Categories
@@ -73,19 +73,6 @@ ACTIONS_POINTS = \
 					ACT_MVP: "4",
 					ACT_PEN_GOALS: "3",
 					ACT_GOALS: "8",
-					ACT_AGAINST_GOALS:"0",
-					ACT_OWN_GOALS: "-2",
-					ACT_YELLOW_CARD: "-2",
-					ACT_RED_CARD: "-8",
-					ACT_BLUE_CARD: "-4",
-					ACT_MISS_PEN: "-4",
-					ACT_SAVED_PEN: "4"
-				},
-		MEDIOCAMPISTA:{
-					ACT_PRESENT:"0",
-					ACT_MVP: "4",
-					ACT_PEN_GOALS: "3",
-					ACT_GOALS: "5",
 					ACT_AGAINST_GOALS:"0",
 					ACT_OWN_GOALS: "-2",
 					ACT_YELLOW_CARD: "-2",

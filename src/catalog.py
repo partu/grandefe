@@ -40,7 +40,7 @@ class DefeCatalog(Catalog):
 
 	#Checks
 	def check_if_player_is_valid(self, player):
-		assert self.normalize(player.position) in constants.ALLOWED_POSITIONS and self.normalize(player.category) in constants.ALLOWED_CATEGORIES,  "Position ({}) or category ({}) is invalid".format(position,category)
+		assert self.normalize(player.position) in constants.ALLOWED_POSITIONS and self.normalize(player.category) in constants.ALLOWED_CATEGORIES,  "Position ({}) or category ({}) is invalid".format(player.position,player.category)
 
 
 
@@ -49,20 +49,32 @@ class DefeCatalog(Catalog):
 		alternate_players_info = filter(lambda p_info: p_info[2] == 0, players_info)
 		titular_players_info = set(players_info) - set(alternate_players_info)
 
+		#Check amount of titulars and alterantes
 		assert len(players_ids) == constants.NUMBER_OF_PLAYERS_IN_TEAM, "The amount of players you insert are different from {}.".format(constants.NUMBER_OF_PLAYERS_IN_TEAM)
 		assert len(set(players_ids)) == constants.NUMBER_OF_PLAYERS_IN_TEAM, "You can't have the same player more than once"
 		assert len(alternate_players_info) == constants.NUMBER_OF_ALTERNATES, "There must exists exactly {} alternate players".format(constants.NUMBER_OF_ALTERNATES)
 		assert len(titular_players_info) == constants.NUMBER_OF_TITULARS, "There must exists exactly {} titular players".format(constants.NUMBER_OF_TITULARS)
 
-		#Check if all categories are valid
+		#Check if all categories and positions are valid
 		for _, player, _ in players_info:
-			assert self.normalize(player.category) in constants.ALLOWED_CATEGORIES, "Category {} is invalid".format(self.normalize(self.normalize(player.category)))
+			self.check_if_player_is_valid(player)
 
-		#Check one alternate player per position
+		#Check positions and categories for alternate players
 		alternate_positions = {self.normalize(player.position) for _, player, _ in alternate_players_info}
-		assert alternate_positions == constants.ALLOWED_POSITIONS, "You must have one alternate player per each position" 
+		alternate_categories = {self.normalize(player.category) for _, player, _ in alternate_players_info}
+		assert alternate_positions == constants.ALLOWED_POSITIONS, "You must have one alternate player per each position at least" 
+		assert alternate_categories == constants.ALLOWED_CATEGORIES, "You must have one alternate player per category"
 
-		#check tactic
+		#Check positions and categories for titular players
+		titulars_positions =  [self.normalize(player.position) for _, player, _ in titular_players_info]
+		titulars_categories = [self.normalize(player.category) for _, player, _ in titular_players_info]
+		assert titulars_positions.count(constants.ARQUERO) == 1, "You must have only one goalkeeper inside your titular team"
+		assert titulars_positions.count(constants.DEFENSOR) == 2, "You must have only two defenses inside your titular team"
+		assert titulars_positions.count(constants.DELANTERO) == 2, "You must have only two offenser inside your titular team"
+		assert set(titulars_categories) == constants.ALLOWED_CATEGORIES, "You must have at least one player of each category inside your titular team"
+		assert titulars_categories.count(constants.SUPERIOR) == 2, "You must two players of each {} category inside your titular team".format(constants.SUPERIOR)
+
+
 
 
 
@@ -125,7 +137,7 @@ class DefeCatalog(Catalog):
 		return query 
 
 	def query_get_positions_of_players(self, players_ids):
-		query = 'SELECT DISTINCT(POSITION) FROM players WHERE player_id IN ({ids})'
+		query = 'SELECT player_id, position FROM players WHERE player_id IN ({ids})'
 		return query.format(ids=",".join(str(_id) for _id in players_ids))
 
 
@@ -134,9 +146,9 @@ class DefeCatalog(Catalog):
 		query = 'SELECT dni, tit1_id,tit2_id,tit3_id,tit4_id,tit5_id,sup1_id,sup2_id,sup3_id,sup4_id FROM users_teams'
 		return query
 
-	def query_get_player_id_by_name_and_category(self, player):
-		query = 'SELECT player_id FROM players WHERE name = "{}" AND category = "{}"'
-		return query.format(self.normalize(player.name), self.normalize(player.category))
+	def query_get_player_id_by_name_category_and_position(self, player):
+		query = 'SELECT player_id FROM players WHERE name = "{}" AND category = "{}" AND position = "{}"'
+		return query.format(self.normalize(player.name), self.normalize(player.category), self.normalize(player.position))
 
 	def query_to_check_valid_user(self, dni):
 		query = 'SELECT * FROM users_teams WHERE dni = "{}"'
@@ -146,9 +158,20 @@ class DefeCatalog(Catalog):
 		query = 'SELECT action, points FROM points_of_action_by_position WHERE position = "{}"'
 		return query.format(self.normalize(position))
 
-	def query_get_present_players(self, _round, players_ids):
-		query = 'SELECT player_id FROM history WHERE player_id IN ({ids}) AND {present} = 1 AND round = {round}'
+	def query_get_if_present_players_and_positions(self, _round, players_ids):
+		query = 'SELECT p.player_id, p.position, h.{present}  FROM history h, players p WHERE h.player_id IN ({ids}) AND h.player_id = p.player_id AND h.round = {round}'
 		return query.format(round=_round, present=constants.ACT_PRESENT, ids=",".join(str(_id) for _id in players_ids))
+
+	def get_points_for_player_id_in_round(self, round_num, players_ids):
+		query = 'SELECT player_id, total_points FROM history WHERE round = {round} AND player_id IN ({ids})'
+		return query.format(round= round_num, ids=','.join(str(_id) for _id in players_ids))
+
+	def query_update_team_points_for_round(self, round_num, team_key, team_points):
+		query = 'INSERT INTO points_of_team_by_round ({columns}) VALUES ({_values})'
+		columns = self.points_of_teams_by_round().format_columns_for_insert_query()
+		_values = [team_key, round_num, team_points]
+		return query.format(columns=columns, _values=",".join(str(x) for x in _values ))
+
 
 	#TABLES
 	def points_of_action_by_position(self):
