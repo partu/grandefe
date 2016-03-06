@@ -1,9 +1,9 @@
 from argparse import ArgumentParser
 from src.utils import Player
-from src.ui.templates import players_template, teams_points_template, teams_template, player_points_template
+from src.ui.templates import players_template, teams_points_template, teams_template, player_points_template, mapping_points_template
 from src.granDT import GranDT
 from src.catalog import DefeCatalog
-
+from src.constants import ACTIONS_COMPLETE_NAME_SPANISH
 
 class Shower(object):
 	def __init__(self):
@@ -44,10 +44,23 @@ class Shower(object):
 			f.write(t.render(player_points=player_points, rounds=played_rounds, player= player))
 
 
+	def show_mapping_points(self):
+		mapping = self.granDT.get_mapping_points()
+		t = mapping_points_template
+		with open('mapping_points.html','w')  as f:
+			f.write(t.render(column_names_spanish=ACTIONS_COMPLETE_NAME_SPANISH, mapping= mapping))
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
 
 	parser = ArgumentParser()
-	parser.add_argument('-t',dest='task', choices=['PlayerPoints', 'TeamPoints', 'Teams', 'Players'] , help="Task to be done.")
+	parser.add_argument('-t',dest='task', choices=['PlayerPoints', 'TeamPoints', 'Teams', 'Players', 'MappingPoints'] , help="Task to be done.")
 	parser.add_argument('-n',dest='name',nargs='+', help="If PlayerPoints option has been choosen, enter the name of the player here.")
 
 	args = parser.parse_args()
@@ -64,14 +77,17 @@ if __name__ == '__main__':
 			parser.error("Missing name of the player")
 		shower.show_player_points(" ".join(args.name))
 		filename_written = 'player_points.html'
-	if args.task == 'TeamPoints':
+	elif args.task == 'TeamPoints':
 		shower.show_teams_points()
 		filename_written = 'teams_points.html'
-	if args.task == 'Teams':
+	elif args.task == 'Teams':
 		shower.show_teams()
 		filename_written = 'teams.html'
-	if args.task == 'Players':
+	elif args.task == 'Players':
 		shower.show_players()
 		filename_written = 'players.html'
+	elif args.task == 'MappingPoints':
+		shower.show_mapping_points()
+		filename_written = 'mapping_points.html'
 
 	print 'Task accomplished. The output file is: {}'.format(filename_written)
