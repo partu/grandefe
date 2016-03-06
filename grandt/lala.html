@@ -1,0 +1,23 @@
+<link href='style.css' rel='stylesheet' type='text/css'>
+
+<table cellspacing='0'> <!-- cellspacing='0' is important, must stay -->
+  <thead>
+    <tr>
+      <th>Nombre</th>
+      <th>Posicion</th>
+      <th>Categoria</th>
+    </tr>
+  </thead>
+
+
+  <tbody>
+  {% for player in players %}
+    <tr>
+      <th> {{player.name}}  </th>
+      <th> {{player.position}}  </th>
+      <th> {{player.category}}  </th>
+    </tr>
+  {% endfor %}
+  </tbody>
+
+</table>
