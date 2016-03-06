@@ -3,7 +3,7 @@ from jinja2 import Template
 
 
 players_template = Template('''
-<link href='style.css' rel='stylesheet' type='text/css'>
+<link href='src/ui/style.css' rel='stylesheet' type='text/css'>
 
 <table cellspacing='0'> <!-- cellspacing='0' is important, must stay -->
   <thead>
@@ -32,7 +32,7 @@ players_template = Template('''
 
 
 teams_template = Template('''
-<link href='style.css' rel='stylesheet' type='text/css'>
+<link href='src/ui/style.css' rel='stylesheet' type='text/css'>
 
 <table cellspacing='0'> <!-- cellspacing='0' is important, must stay -->
   <thead>
@@ -63,7 +63,7 @@ teams_template = Template('''
 
 
 teams_points_template = Template('''
-<link href='style.css' rel='stylesheet' type='text/css'>
+<link href='src/ui/style.css' rel='stylesheet' type='text/css'>
 
 <table cellspacing='0'> <!-- cellspacing='0' is important, must stay -->
   <thead>
@@ -96,7 +96,7 @@ teams_points_template = Template('''
 ''')
 
 player_points_template = Template('''
-<link href='style.css' rel='stylesheet' type='text/css'>
+<link href='src/ui/style.css' rel='stylesheet' type='text/css'>
 
 <table cellspacing='0'> <!-- cellspacing='0' is important, must stay -->
   <thead>
@@ -119,6 +119,34 @@ player_points_template = Template('''
       <td>  {{points}}  </td>
       {% endfor %}
     </tr>
+  </tbody>
+
+</table>
+''')
+
+mapping_points_template = Template('''
+<link href='src/ui/style.css' rel='stylesheet' type='text/css'>
+
+<table cellspacing='0'> <!-- cellspacing='0' is important, must stay -->
+  <thead>
+    <tr>
+      <th> Posicion </th>
+      {% for name in column_names_spanish %}
+      <th> {{name}} </th>
+      {% endfor %}
+    </tr>
+  </thead>
+
+
+  <tbody>
+      {% for pos, map in mapping.iteritems() %}
+    <tr>
+      <td>  {{pos}}  </td>
+      {% for action, points in map %}
+      <td> {{points}} </td>
+      {% endfor %}
+    </tr>
+      {% endfor %}
   </tbody>
 
 </table>

@@ -196,6 +196,10 @@ class DefeCatalog(Catalog):
 		query = 'SELECT * FROM players WHERE name = "{player_name}"'
 		return query.format(player_name=player_name)
 
+	def query_get_mapping_points(self):
+		query = 'SELECT * FROM points_of_action_by_position'
+		return query
+
 
 
 	#TABLES

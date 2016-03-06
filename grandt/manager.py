@@ -1,7 +1,7 @@
 #!/usr/bin/python
 import json
 
-from csvparser import CSVParser
+from src.csvparser import CSVParser
 from argparse import ArgumentParser
 
 from src.granDT import GranDT

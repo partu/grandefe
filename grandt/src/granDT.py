@@ -46,6 +46,7 @@ class GranDT(object):
 		query = self.catalog.query_get_all_teams_points()
 		teams_points = self.conn.execute_query(query).fetchall()
 		res = {}
+		#GROUPBY FUNCTION! MAYBE WE MUST ADD THIS TO UTILS
 		for dni, user_name, team_name, round_numb, points in teams_points:
 			if (dni,user_name, team_name) not in res.keys():
 				res.update({(dni,user_name, team_name):[(round_numb, points)]})
@@ -75,6 +76,19 @@ class GranDT(object):
 		else:
 			raise Exception("Invalid player name:  {}".format(player_name))
 
+	def get_mapping_points(self):
+		res = {}
+		query = self.catalog.query_get_mapping_points()
+		mapping = self.conn.execute_query(query).fetchall()
+		
+		#GROUPBY FUNCTION! MAYBE WE MUST ADD THIS TO UTILS
+		for action, position, points in mapping:
+			if position not in res.keys():
+				res.update({position:[(action, points)]})
+			else:
+				res[position].append((action, points))
+
+		return res
 
 	def check_valid_user(self,dni):
 		query = self.catalog.query_to_check_valid_user(dni)
